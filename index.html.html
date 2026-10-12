@@ -1,0 +1,1137 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Gestión de Activos</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
+<style>
+:root { --brand:#1f4e79; --brand-light:#eaf1f8; }
+body { background:#f4f6f9; font-family:'Segoe UI',system-ui,-apple-system,sans-serif; }
+.sidebar { width:250px; min-height:100vh; background:var(--brand); color:#fff; position:sticky; top:0; overflow-y:auto; }
+.sidebar-brand { display:flex; align-items:center; gap:10px; padding:18px 16px; font-weight:700; font-size:1.05rem; border-bottom:1px solid rgba(255,255,255,.15); }
+.sidebar .nav-link { color:rgba(255,255,255,.85); padding:10px 16px; font-size:.92rem; border-left:3px solid transparent; display:flex; align-items:center; gap:10px; cursor:pointer; }
+.sidebar .nav-link:hover { background:rgba(255,255,255,.08); }
+.sidebar .nav-link.active { background:rgba(255,255,255,.14); border-left-color:#ffc107; color:#fff; font-weight:600; }
+.content { flex:1; min-width:0; }
+.topbar { background:#fff; padding:12px 20px; border-bottom:1px solid #e3e6ea; position:sticky; top:0; z-index:5; }
+.kpi-card { border:none; border-radius:12px; box-shadow:0 2px 8px rgba(0,0,0,.06); }
+.kpi-card .kpi-value { font-size:1.55rem; line-height:1.1; font-weight:700; color:var(--brand); }
+.module-table th { white-space:nowrap; background:var(--brand-light); font-size:.82rem; }
+.module-table td { font-size:.85rem; vertical-align:middle; }
+.dash-hero { background:linear-gradient(135deg,#17406a 0%,#1f4e79 45%,#2e86c1 100%); color:#fff; border-radius:16px; padding:22px 26px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; box-shadow:0 6px 18px rgba(31,78,121,.25); }
+.dash-hero h4 { margin:0; font-weight:700; }
+.dash-hero p { margin:2px 0 0; opacity:.85; }
+.min-w-0 { min-width:0; }
+.kpi-card .kpi-value { white-space:nowrap; }
+.hero-chip { background:rgba(255,255,255,.16); border:1px solid rgba(255,255,255,.3); border-radius:30px; padding:8px 16px; font-size:.9rem; backdrop-filter:blur(4px); }
+.kpi-hover { transition:transform .15s, box-shadow .15s; }
+.kpi-hover:hover { transform:translateY(-3px); box-shadow:0 8px 20px rgba(0,0,0,.1); }
+.kpi-icon { width:46px; height:46px; border-radius:12px; display:flex; align-items:center; justify-content:center; font-size:1.3rem; flex-shrink:0; }
+.tone-primary { background:#e3eefa; color:#1f4e79; } .tone-success { background:#dff5e6; color:#198754; }
+.tone-danger { background:#fde4e6; color:#dc3545; } .tone-warning { background:#fff3cd; color:#b58105; }
+.tone-info { background:#dff3fb; color:#0a8fa8; } .tone-purple { background:#ece6fb; color:#6f42c1; }
+.dash-card .card-header { background:#fff; border-bottom:1px solid #eef0f3; font-weight:600; border-radius:12px 12px 0 0; }
+.dash-list .item { display:flex; justify-content:space-between; align-items:center; gap:10px; padding:10px 0; border-bottom:1px solid #f0f2f5; font-size:.88rem; }
+.dash-list .item:last-child { border-bottom:none; }
+#genericForm { display:flex; flex-direction:column; flex:1 1 auto; min-height:0; overflow:hidden; }
+#genericForm .modal-body { overflow-y:auto; }
+#genericForm .modal-footer { background:#f8f9fa; position:sticky; bottom:0; }
+#genericForm .form-label { font-weight:600; font-size:.85rem; margin-bottom:.25rem; }
+#genericForm .form-control:invalid, #genericForm .form-select:invalid { border-color:#dc3545; }
+@keyframes rowflash { from { background:#c8f0d2; } to { background:transparent; } }
+tr.row-saved td { animation: rowflash 3s ease-out; }
+@media (max-width:992px){ .sidebar{ position:fixed; left:-260px; z-index:1050; transition:left .2s;} .sidebar.show{ left:0; } }
+</style>
+</head>
+<body>
+
+<div class="d-flex">
+  <nav class="sidebar" id="sidebar">
+    <div class="sidebar-brand"><i class="bi bi-truck"></i><span>Gestión de Activos</span></div>
+    <ul class="nav flex-column" id="navMenu"></ul>
+  </nav>
+
+  <main class="content">
+    <header class="topbar d-flex align-items-center justify-content-between">
+      <button class="btn btn-sm btn-outline-secondary d-lg-none" id="btnToggleSidebar"><i class="bi bi-list"></i></button>
+      <h5 class="m-0" id="pageTitle">Panel General</h5>
+      <div class="d-flex gap-2">
+        <button class="btn btn-sm btn-outline-secondary" id="btnExportBackup" title="Descargar copia de seguridad de todos los datos (JSON)">
+          <i class="bi bi-cloud-download"></i> <span class="d-none d-md-inline">Respaldo</span>
+        </button>
+        <label class="btn btn-sm btn-outline-secondary mb-0" title="Restaurar copia de seguridad (JSON)">
+          <i class="bi bi-cloud-upload"></i> <span class="d-none d-md-inline">Restaurar</span>
+          <input type="file" id="inputRestore" accept="application/json" hidden>
+        </label>
+      </div>
+    </header>
+    <div id="storageWarning" class="alert alert-warning m-3 mb-0 d-none"></div>
+    <div class="container-fluid p-3" id="appRoot"></div>
+  </main>
+</div>
+
+<div class="modal fade" id="formModal" tabindex="-1">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable modal-fullscreen-sm-down">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="formModalTitle">Registro</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+      <form id="genericForm" novalidate>
+        <div class="modal-body" id="formModalBody"></div>
+        <div class="modal-footer">
+          <span class="text-muted small me-auto">* Campos obligatorios</span>
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-success px-4" id="btnGuardar"><i class="bi bi-check2-circle"></i> Guardar registro</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<div class="toast-container position-fixed bottom-0 end-0 p-3" id="toastContainer"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.4/dist/jspdf.plugin.autotable.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.js"></script>
+
+<script>
+// =====================================================================
+// GESTIÓN DE ACTIVOS — versión de archivo único (sin backend)
+// Persistencia: localStorage del navegador.
+// =====================================================================
+
+const STORAGE_PREFIX = 'ga_';
+
+// ---------------------------------------------------------------------
+// Capa de datos (localStorage a modo de "base de datos")
+// ---------------------------------------------------------------------
+const MEM = {};
+let storageOk = (function () {
+  try { localStorage.setItem('__ga_test', '1'); localStorage.removeItem('__ga_test'); return true; }
+  catch (e) { return false; }
+})();
+
+function showStorageWarning() {
+  const el = document.getElementById('storageWarning');
+  if (!el) return;
+  el.innerHTML = '<i class="bi bi-exclamation-triangle"></i> <strong>Tu navegador no permite guardar datos de forma permanente</strong> ' +
+    '(suele pasar al abrir el archivo desde una vista previa). Los registros solo se conservan mientras esta pestaña esté abierta. ' +
+    'Abre el archivo descargado directamente en Chrome o Edge, o usa el botón <strong>Respaldo</strong> para no perder la información.';
+  el.classList.remove('d-none');
+}
+if (!storageOk) showStorageWarning();
+
+const DB = {
+  getAll(table) {
+    const key = STORAGE_PREFIX + table;
+    let raw = null;
+    if (storageOk) {
+      try { raw = localStorage.getItem(key); }
+      catch (e) { storageOk = false; showStorageWarning(); raw = MEM[key] || null; }
+    } else {
+      raw = MEM[key] || null;
+    }
+    try { return JSON.parse(raw || '[]'); } catch (e) { return []; }
+  },
+  saveAll(table, arr) {
+    const key = STORAGE_PREFIX + table;
+    const json = JSON.stringify(arr);
+    if (storageOk) {
+      try {
+        localStorage.setItem(key, json);
+        if (localStorage.getItem(key) !== json) throw new Error('verificación fallida');
+        return;
+      } catch (e) {
+        if (e && (e.name === 'QuotaExceededError' || e.code === 22)) {
+          throw new Error('El almacenamiento del navegador está lleno. Descarga un Respaldo y quita archivos adjuntos grandes.');
+        }
+        storageOk = false; showStorageWarning();
+      }
+    }
+    MEM[key] = json;
+  },
+  get(table, id) {
+    return this.getAll(table).find((r) => String(r.id) === String(id));
+  },
+  insert(table, record) {
+    const arr = this.getAll(table);
+    const nextId = arr.reduce((max, r) => Math.max(max, r.id || 0), 0) + 1;
+    const full = { id: nextId, creado_en: new Date().toISOString(), ...record };
+    arr.push(full);
+    this.saveAll(table, arr);
+    return full;
+  },
+  update(table, id, patch) {
+    const arr = this.getAll(table);
+    const idx = arr.findIndex((r) => String(r.id) === String(id));
+    if (idx === -1) return null;
+    arr[idx] = { ...arr[idx], ...patch };
+    this.saveAll(table, arr);
+    return arr[idx];
+  },
+  remove(table, id) {
+    const arr = this.getAll(table);
+    const filtered = arr.filter((r) => String(r.id) !== String(id));
+    this.saveAll(table, filtered);
+    return filtered.length !== arr.length;
+  },
+};
+
+// ---------------------------------------------------------------------
+// Configuración declarativa de los 11 módulos
+// ---------------------------------------------------------------------
+const ESTADOS_EQUIPO = ['Operativo', 'En Mantenimiento', 'Inoperativo', 'Baja'];
+const PERIODOS = ['Diario', 'Semanal', 'Mensual'];
+
+const MODULES = [
+  {
+    key: 'equipos', table: 'equipos', icon: 'bi-truck', label: 'Gestión de Flotas',
+    exports: ['pdf', 'excel'],
+    fields: [
+      { key: 'codigo', label: 'Código', type: 'text', required: true },
+      { key: 'maquina', label: 'Máquina', type: 'text', required: true },
+      { key: 'serie', label: 'Serie', type: 'text' },
+      { key: 'marca', label: 'Marca', type: 'text' },
+      { key: 'modelo', label: 'Modelo', type: 'text' },
+      { key: 'anio', label: 'Año', type: 'number' },
+      { key: 'horometro', label: 'Horómetro (h)', type: 'number', step: '0.1' },
+      { key: 'kilometraje', label: 'Kilometraje (km)', type: 'number', step: '0.1' },
+      { key: 'ubicacion', label: 'Ubicación', type: 'text' },
+      { key: 'estado', label: 'Estado', type: 'select', options: ESTADOS_EQUIPO },
+    ],
+    columns: ['codigo', 'maquina', 'serie', 'marca', 'modelo', 'horometro', 'kilometraje', 'ubicacion', 'estado'],
+  },
+  {
+    key: 'servicios', table: 'servicios', icon: 'bi-tools', label: 'Servicios Ejecutados',
+    exports: ['pdf', 'excel'], needsEquipo: true,
+    fields: [
+      { key: 'equipo_id', label: 'Equipo', type: 'equipo', required: true },
+      { key: 'tipo_servicio', label: 'Tipo de servicio', type: 'text', required: true },
+      { key: 'fecha_inicio', label: 'Fecha inicio', type: 'date' },
+      { key: 'fecha_fin', label: 'Fecha fin', type: 'date' },
+      { key: 'avance', label: 'Avance (%)', type: 'text', placeholder: 'ej. 100%' },
+      { key: 'proveedor', label: 'Proveedor / Ejecutor', type: 'text' },
+      { key: 'ejecutado_por', label: 'Observador responsable', type: 'text' },
+      { key: 'observaciones', label: 'Observaciones', type: 'textarea' },
+    ],
+    columns: ['equipo_codigo', 'tipo_servicio', 'fecha_inicio', 'fecha_fin', 'avance', 'proveedor', 'ejecutado_por'],
+  },
+  {
+    key: 'partes', table: 'partes', icon: 'bi-gear-wide-connected', label: 'Gestión de Partes',
+    exports: ['pdf'], needsEquipo: true, inverseLink: true,
+    fields: [
+      { key: 'equipo_id', label: 'Equipo / Serie', type: 'equipo', required: true },
+      { key: 'codigo_parte', label: 'Código de la parte', type: 'text', required: true },
+      { key: 'categoria', label: 'Categoría', type: 'select', options: ['Alta rotación', 'Mantenimiento', 'Componente principal', 'Sistema hidráulico', 'Otro'] },
+      { key: 'stock', label: 'Stock', type: 'number', step: '0.01', min: '0', required: true },
+      { key: 'acciones', label: 'Acciones', type: 'number', step: '0.01', min: '0',
+        help: 'Inversamente proporcional al stock: Stock × Acciones = k. Si cambias uno, el otro se recalcula.' },
+      { key: 'k', label: 'Constante de proporcionalidad (k)', type: 'number', step: '0.01', min: '0', default: 100 },
+      { key: 'observaciones', label: 'Observaciones', type: 'textarea' },
+    ],
+    columns: ['equipo_maquina', 'equipo_serie', 'codigo_parte', 'categoria', 'stock'],
+    exportColumns: ['equipo_maquina', 'equipo_serie', 'codigo_parte', 'categoria', 'stock', 'acciones'],
+    showActionValue: 'acciones',
+  },
+  {
+    key: 'informes', table: 'informes', icon: 'bi-file-earmark-text', label: 'Informes de Servicio',
+    exports: ['pdf'], needsEquipo: true,
+    fields: [
+      { key: 'equipo_id', label: 'Equipo / Serie', type: 'equipo', required: true },
+      { key: 'titulo', label: 'Título del informe', type: 'text', required: true },
+      { key: 'fecha_informe', label: 'Fecha del informe', type: 'date' },
+      { key: 'detalle', label: 'Detalle', type: 'textarea' },
+    ],
+    columns: ['equipo_maquina', 'equipo_serie', 'titulo', 'fecha_informe'],
+    rowActions: ['pdf'],
+  },
+  {
+    key: 'averias', table: 'averias', icon: 'bi-exclamation-triangle', label: 'Reporte de Averías',
+    exports: ['pdf', 'excel'], needsEquipo: true,
+    fields: [
+      { key: 'equipo_id', label: 'Equipo', type: 'equipo', required: true },
+      { key: 'fecha', label: 'Fecha', type: 'date', required: true },
+      { key: 'descripcion', label: 'Descripción de la avería', type: 'textarea', required: true },
+      { key: 'gravedad', label: 'Gravedad', type: 'select', options: ['Baja', 'Media', 'Alta', 'Crítica'] },
+      { key: 'estado', label: 'Estado', type: 'select', options: ['Reportada', 'En proceso', 'Cerrada'] },
+      { key: 'periodo', label: 'Periodo de reporte', type: 'select', options: PERIODOS },
+      { key: 'reportado_por', label: 'Reportado por', type: 'text' },
+    ],
+    columns: ['equipo_codigo', 'fecha', 'descripcion', 'gravedad', 'estado', 'periodo'],
+  },
+  {
+    key: 'infotecnica', table: 'infotecnica_docs', icon: 'bi-clipboard-data', label: 'Información Técnica',
+    custom: 'infotecnica', exports: [], fields: [], columns: [],
+  },
+  {
+    key: 'mantenimiento', table: 'mantenimiento', icon: 'bi-calendar2-check', label: 'Gestión de Mantenimiento',
+    exports: ['pdf', 'excel'], needsEquipo: true,
+    fields: [
+      { key: 'equipo_id', label: 'Serie', type: 'equipo', required: true },
+      { key: 'tipo_mantenimiento', label: 'Tipo de mantenimiento', type: 'select', options: ['Preventivo', 'Correctivo', 'Predictivo'] },
+      { key: 'fecha_actual', label: 'Fecha de mantenimiento actual', type: 'date' },
+      { key: 'horometro_km_actual', label: 'Horómetro/Km actual', type: 'number' },
+      { key: 'proximo_horometro_km', label: 'Próximo Horómetro/Km', type: 'number' },
+      { key: 'fecha_proximo', label: 'Fecha próximo mantenimiento', type: 'date' },
+      { key: 'estado', label: 'Estado', type: 'select', options: ['Programado', 'Próximo', 'Completado'] },
+      { key: 'observaciones', label: 'Observaciones', type: 'textarea' },
+    ],
+    columns: ['equipo_serie', 'tipo_mantenimiento', 'fecha_actual', 'horometro_km_actual', 'proximo_horometro_km', 'fecha_proximo', 'estado'],
+  },
+  {
+    key: 'gastos', table: 'gastos', icon: 'bi-cash-coin', label: 'Gestión de Gastos',
+    exports: ['pdf', 'excel'], needsEquipo: true,
+    fields: [
+      { key: 'equipo_id', label: 'Equipo', type: 'equipo', required: true },
+      { key: 'fecha', label: 'Fecha', type: 'date', required: true },
+      { key: 'categoria', label: 'Categoría de gasto', type: 'text' },
+      { key: 'monto', label: 'Monto (S/)', type: 'number', step: '0.01', required: true },
+      { key: 'horometro_km', label: 'Horómetro / Kilometraje', type: 'number', step: '0.1' },
+      { key: 'descripcion', label: 'Descripción', type: 'textarea' },
+    ],
+    columns: ['equipo_codigo', 'fecha', 'categoria', 'monto', 'horometro_km'],
+    chart: 'gastos',
+  },
+  {
+    key: 'combustible', table: 'combustible', icon: 'bi-fuel-pump', label: 'Consumo de Combustible',
+    exports: ['pdf'], needsEquipo: true,
+    fields: [
+      { key: 'equipo_id', label: 'Equipo', type: 'equipo', required: true },
+      { key: 'fecha', label: 'Fecha', type: 'date', required: true },
+      { key: 'cantidad', label: 'Cantidad', type: 'number', step: '0.1', required: true },
+      { key: 'unidad', label: 'Unidad', type: 'select', options: ['gal', 'lt'] },
+      { key: 'costo', label: 'Costo (S/)', type: 'number', step: '0.01' },
+      { key: 'horometro_km', label: 'Horómetro / Kilometraje', type: 'number', step: '0.1' },
+    ],
+    columns: ['equipo_codigo', 'fecha', 'cantidad', 'unidad', 'costo', 'horometro_km'],
+  },
+];
+
+const COLUMN_LABELS = {
+  codigo:'Código', maquina:'Máquina', serie:'Serie', marca:'Marca', modelo:'Modelo', anio:'Año',
+  horometro:'Horómetro', kilometraje:'Kilometraje', ubicacion:'Ubicación', estado:'Estado',
+  equipo_codigo:'Equipo', equipo_maquina:'Equipo', equipo_serie:'Serie',
+  tipo_servicio:'Tipo servicio', fecha_inicio:'Inicio', fecha_fin:'Fin',
+  avance:'Avance', proveedor:'Proveedor', ejecutado_por:'Observador',
+  codigo_parte:'Código de la parte', categoria:'Categoría', stock:'Stock', acciones:'Acciones', titulo:'Título',
+  fecha_informe:'Fecha del informe', fecha:'Fecha', descripcion:'Descripción', gravedad:'Gravedad',
+  periodo:'Periodo', tipo_mantenimiento:'Tipo mant.', fecha_actual:'Fecha mant. actual',
+  horometro_km_actual:'Horóm./Km actual', proximo_horometro_km:'Próx. Horóm./Km', fecha_proximo:'Fecha próximo',
+  monto:'Monto', horometro_km:'Horómetro/Km', cantidad:'Cantidad', costo:'Costo', unidad:'Unidad',
+};
+
+// ---------------------------------------------------------------------
+// Estado y utilidades de UI
+// ---------------------------------------------------------------------
+let equiposCache = [];
+let editingId = null;
+let currentModKey = null;
+const formModalEl = document.getElementById('formModal');
+const formModal = new bootstrap.Modal(formModalEl);
+
+function toast(message, variant = 'success') {
+  const id = 't' + Date.now();
+  const html = `
+    <div id="${id}" class="toast align-items-center text-bg-${variant} border-0" role="alert">
+      <div class="d-flex">
+        <div class="toast-body">${message}</div>
+        <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+      </div>
+    </div>`;
+  document.getElementById('toastContainer').insertAdjacentHTML('beforeend', html);
+  const el = document.getElementById(id);
+  new bootstrap.Toast(el, { delay: 3000 }).show();
+  el.addEventListener('hidden.bs.toast', () => el.remove());
+}
+
+function esc(v) {
+  return String(v === null || v === undefined ? '' : v)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function fmt(val) {
+  if (val === null || val === undefined || val === '') return '<span class="text-muted">—</span>';
+  const t = String(val);
+  return esc(t.length > 60 ? t.slice(0, 60) + '…' : t);
+}
+
+function equipoLabel(e) {
+  return `${e.codigo} - ${e.maquina || ''}${e.serie ? ' (Serie ' + e.serie + ')' : ''}`;
+}
+
+// Migración: versiones anteriores usaban "tipo" y "nombre" en la flota
+(function migrarEquipos() {
+  const eqs = DB.getAll('equipos');
+  let changed = false;
+  eqs.forEach((e) => {
+    if (e.serie === undefined && e.tipo !== undefined) { e.serie = e.tipo; changed = true; }
+    if (e.maquina === undefined && e.nombre !== undefined) { e.maquina = e.nombre; changed = true; }
+  });
+  if (changed) DB.saveAll('equipos', eqs);
+})();
+
+function refreshEquipos() {
+  equiposCache = DB.getAll('equipos');
+}
+
+function joinEquipo(record) {
+  const eq = equiposCache.find((e) => String(e.id) === String(record.equipo_id));
+  return {
+    ...record,
+    equipo_codigo: eq ? eq.codigo : '',
+    equipo_maquina: eq ? (eq.maquina || '') : '',
+    equipo_serie: eq ? (eq.serie || '') : '',
+  };
+}
+
+// ---------------------------------------------------------------------
+// Sidebar / navegación
+// ---------------------------------------------------------------------
+function renderSidebar() {
+  const nav = document.getElementById('navMenu');
+  let html = `<li class="nav-item"><a class="nav-link" data-key="__dashboard" href="#dashboard"><i class="bi bi-speedometer2"></i> Panel General</a></li>`;
+  MODULES.forEach((m) => {
+    html += `<li class="nav-item"><a class="nav-link" data-key="${m.key}" href="#${m.key}"><i class="bi ${m.icon}"></i> ${m.label}</a></li>`;
+  });
+  nav.innerHTML = html;
+  nav.querySelectorAll('.nav-link').forEach((link) => {
+    link.addEventListener('click', () => {
+      window.location.hash = link.dataset.key === '__dashboard' ? 'dashboard' : link.dataset.key;
+      document.getElementById('sidebar').classList.remove('show');
+    });
+  });
+}
+
+function setActiveLink(key) {
+  document.querySelectorAll('.sidebar .nav-link').forEach((l) => l.classList.remove('active'));
+  const target = document.querySelector(`.sidebar .nav-link[data-key="${key}"]`);
+  if (target) target.classList.add('active');
+}
+
+window.addEventListener('hashchange', route);
+document.getElementById('btnToggleSidebar').addEventListener('click', () => {
+  document.getElementById('sidebar').classList.toggle('show');
+});
+
+function route() {
+  const hash = window.location.hash.replace('#', '') || 'dashboard';
+  if (hash === 'dashboard') {
+    setActiveLink('__dashboard');
+    document.getElementById('pageTitle').textContent = 'Panel General';
+    renderDashboard();
+    return;
+  }
+  const mod = MODULES.find((m) => m.key === hash);
+  if (!mod) { window.location.hash = 'dashboard'; return; }
+  setActiveLink(mod.key);
+  document.getElementById('pageTitle').textContent = mod.label;
+  if (mod.custom === 'infotecnica') { infoEquipoId = null; infoOpenKey = null; }
+  renderModule(mod);
+}
+
+// ---------------------------------------------------------------------
+// Dashboard
+// ---------------------------------------------------------------------
+let dashCharts = [];
+const pad2 = (n) => String(n).padStart(2, '0');
+const ymKey = (d) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}`;
+
+function eqShort(id) {
+  const e = equiposCache.find((x) => String(x.id) === String(id));
+  return e ? `${esc(e.codigo)} · ${esc(e.maquina || '')}` : '—';
+}
+
+function renderDashboard() {
+  dashCharts.forEach((c) => c.destroy());
+  dashCharts = [];
+  refreshEquipos();
+  const equipos = equiposCache;
+  const averias = DB.getAll('averias');
+  const mantenimiento = DB.getAll('mantenimiento');
+  const gastos = DB.getAll('gastos');
+  const servicios = DB.getAll('servicios');
+
+  const hoy = new Date();
+  const hoy0 = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate());
+  const toDate = (str) => new Date(str + 'T00:00:00');
+
+  const totalEquipos = equipos.length;
+  const operativos = equipos.filter((e) => e.estado === 'Operativo').length;
+  const pctOper = totalEquipos ? Math.round((operativos / totalEquipos) * 100) : 0;
+  const averiasAbiertasList = averias.filter((a) => a.estado !== 'Cerrada')
+    .sort((a, b) => (b.fecha || '').localeCompare(a.fecha || ''));
+
+  const pendientes = mantenimiento.filter((m) => m.estado !== 'Completado' && m.fecha_proximo)
+    .sort((a, b) => a.fecha_proximo.localeCompare(b.fecha_proximo));
+  const en15 = new Date(hoy0); en15.setDate(en15.getDate() + 15);
+  const proximos15 = pendientes.filter((m) => toDate(m.fecha_proximo) <= en15).length;
+
+  const mesActual = ymKey(hoy);
+  const gastoMes = gastos.filter((g) => (g.fecha || '').slice(0, 7) === mesActual)
+    .reduce((acc, g) => acc + (parseFloat(g.monto) || 0), 0);
+  const serviciosEnCurso = servicios.filter((s) => !s.fecha_fin).length;
+
+  const h = hoy.getHours();
+  const saludo = h < 12 ? 'Buenos días' : h < 19 ? 'Buenas tardes' : 'Buenas noches';
+  const fechaTxt = hoy.toLocaleDateString('es-PE', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+  const fechaLarga = fechaTxt.charAt(0).toUpperCase() + fechaTxt.slice(1);
+
+  const proximosHtml = pendientes.slice(0, 5).map((m) => {
+    const dias = Math.round((toDate(m.fecha_proximo) - hoy0) / 86400000);
+    const badge = dias < 0 ? `<span class="badge text-bg-danger">Vencido ${Math.abs(dias)} d</span>`
+      : dias === 0 ? '<span class="badge text-bg-warning">Hoy</span>'
+      : dias <= 15 ? `<span class="badge text-bg-warning">En ${dias} d</span>`
+      : `<span class="badge text-bg-secondary">En ${dias} d</span>`;
+    return `<div class="item"><div><div class="fw-semibold">${eqShort(m.equipo_id)}</div>
+      <div class="text-muted small">${esc(m.tipo_mantenimiento || 'Mantenimiento')} · ${esc(m.fecha_proximo)}</div></div>${badge}</div>`;
+  }).join('') || '<div class="text-muted text-center py-4"><i class="bi bi-check2-circle fs-3 d-block"></i>Sin mantenimientos pendientes</div>';
+
+  const gravColor = { 'Crítica': 'danger', 'Alta': 'warning', 'Media': 'info', 'Baja': 'secondary' };
+  const averiasHtml = averiasAbiertasList.slice(0, 5).map((a) => `
+    <div class="item"><div><div class="fw-semibold">${eqShort(a.equipo_id)}</div>
+      <div class="text-muted small">${fmt(a.descripcion)} · ${esc(a.fecha || '')}</div></div>
+      <span class="badge text-bg-${gravColor[a.gravedad] || 'secondary'}">${esc(a.gravedad || '—')}</span></div>`).join('')
+    || '<div class="text-muted text-center py-4"><i class="bi bi-emoji-smile fs-3 d-block"></i>Sin averías abiertas</div>';
+
+  const root = document.getElementById('appRoot');
+  root.innerHTML = `
+    <div class="dash-hero mb-4">
+      <div><h4>${saludo} 👋</h4><p>${fechaLarga}</p></div>
+      <div class="hero-chip"><i class="bi bi-truck"></i> ${totalEquipos} equipos · ${pctOper}% operativos</div>
+    </div>
+
+    <div class="row g-3 mb-3">
+      ${kpi('bi-truck', 'Total de equipos', totalEquipos, 'primary')}
+      ${kpi('bi-check-circle', 'Equipos operativos', operativos, 'success')}
+      ${kpi('bi-exclamation-triangle', 'Averías abiertas', averiasAbiertasList.length, 'danger')}
+      ${kpi('bi-calendar2-check', 'Mant. próximos (15 días)', proximos15, 'warning')}
+      ${kpi('bi-cash-coin', 'Gasto del mes', 'S/ ' + gastoMes.toFixed(2), 'info')}
+      ${kpi('bi-tools', 'Servicios en curso', serviciosEnCurso, 'purple')}
+    </div>
+
+    <div class="row g-3 mb-3">
+      <div class="col-lg-4">
+        <div class="card kpi-card dash-card h-100"><div class="card-header"><i class="bi bi-pie-chart"></i> Estado de la flota</div>
+          <div class="card-body">${totalEquipos
+            ? '<div style="position:relative;height:240px"><canvas id="dashEstado"></canvas></div>'
+            : '<div class="text-muted text-center py-5">Registra equipos para ver el estado de tu flota</div>'}</div></div>
+      </div>
+      <div class="col-lg-8">
+        <div class="card kpi-card dash-card h-100"><div class="card-header"><i class="bi bi-bar-chart"></i> Gasto de los últimos 6 meses (S/)</div>
+          <div class="card-body"><div style="position:relative;height:240px"><canvas id="dashGastos"></canvas></div></div></div>
+      </div>
+    </div>
+
+    <div class="row g-3">
+      <div class="col-lg-6">
+        <div class="card kpi-card dash-card h-100"><div class="card-header"><i class="bi bi-calendar2-week"></i> Próximos mantenimientos</div>
+          <div class="card-body dash-list">${proximosHtml}</div></div>
+      </div>
+      <div class="col-lg-6">
+        <div class="card kpi-card dash-card h-100"><div class="card-header"><i class="bi bi-exclamation-octagon"></i> Averías abiertas recientes</div>
+          <div class="card-body dash-list">${averiasHtml}</div></div>
+      </div>
+    </div>
+    <p class="text-muted small text-center mt-4 mb-0"><i class="bi bi-shield-lock"></i> Los datos se guardan en este navegador. Usa <strong>Respaldo</strong> (arriba) para tener una copia de seguridad.</p>
+  `;
+
+  if (typeof Chart === 'undefined') return;
+
+  if (totalEquipos) {
+    const cols = { 'Operativo': '#198754', 'En Mantenimiento': '#ffc107', 'Inoperativo': '#dc3545', 'Baja': '#6c757d' };
+    const counts = ESTADOS_EQUIPO.map((st) => equipos.filter((e) => e.estado === st).length);
+    const sinEstado = equipos.filter((e) => !ESTADOS_EQUIPO.includes(e.estado)).length;
+    const labels = [...ESTADOS_EQUIPO]; const data = [...counts]; const colors = ESTADOS_EQUIPO.map((st) => cols[st]);
+    if (sinEstado) { labels.push('Sin estado'); data.push(sinEstado); colors.push('#adb5bd'); }
+    dashCharts.push(new Chart(document.getElementById('dashEstado'), {
+      type: 'doughnut',
+      data: { labels, datasets: [{ data, backgroundColor: colors, borderWidth: 2, borderColor: '#fff' }] },
+      options: { responsive: true, maintainAspectRatio: false, cutout: '62%', plugins: { legend: { position: 'bottom' } } },
+    }));
+  }
+
+  const meses = []; const montos = [];
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(hoy.getFullYear(), hoy.getMonth() - i, 1);
+    const k = ymKey(d);
+    meses.push(d.toLocaleDateString('es-PE', { month: 'short', year: '2-digit' }));
+    montos.push(gastos.filter((g) => (g.fecha || '').slice(0, 7) === k).reduce((acc, g) => acc + (parseFloat(g.monto) || 0), 0));
+  }
+  dashCharts.push(new Chart(document.getElementById('dashGastos'), {
+    type: 'bar',
+    data: { labels: meses, datasets: [{ label: 'Gasto (S/)', data: montos, backgroundColor: 'rgba(46,134,193,.85)', borderRadius: 8, maxBarThickness: 46 }] },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false }, tooltip: { callbacks: { label: (c) => 'S/ ' + c.parsed.y.toFixed(2) } } },
+      scales: { y: { beginAtZero: true, grid: { color: '#eef0f3' } }, x: { grid: { display: false } } },
+    },
+  }));
+}
+
+function kpi(icon, label, value, tone = 'primary') {
+  return `
+    <div class="col-6 col-md-4 col-xxl-2">
+      <div class="card kpi-card kpi-hover h-100">
+        <div class="card-body d-flex align-items-center gap-3">
+          <div class="kpi-icon tone-${tone}"><i class="bi ${icon}"></i></div>
+          <div class="min-w-0"><div class="kpi-value">${value}</div><div class="text-muted small lh-sm">${label}</div></div>
+        </div>
+      </div>
+    </div>`;
+}
+
+// ---------------------------------------------------------------------
+// Renderizado genérico de módulos (tabla + CRUD + export)
+// ---------------------------------------------------------------------
+function renderModule(mod) {
+  currentModKey = mod.key;
+  refreshEquipos();
+  if (gastoChart) { gastoChart.destroy(); gastoChart = null; }
+  if (mod.custom === 'infotecnica') { renderInfoTecnica(); return; }
+  const root = document.getElementById('appRoot');
+
+  let rows = DB.getAll(mod.table);
+  if (mod.needsEquipo) rows = rows.map(joinEquipo);
+  rows = rows.slice().sort((a, b) => (b.id || 0) - (a.id || 0));
+
+  const exportButtons = (mod.exports || [])
+    .map((type) => {
+      const icon = type === 'pdf' ? 'bi-file-earmark-pdf' : 'bi-file-earmark-excel';
+      return `<button class="btn btn-outline-secondary btn-sm" onclick="exportModule('${mod.key}','${type}')"><i class="bi ${icon}"></i> ${type.toUpperCase()}</button>`;
+    }).join(' ');
+
+  const columns = mod.columns;
+  const theadCols = columns.map((c) => `<th>${COLUMN_LABELS[c] || c}</th>`).join('');
+
+  const tbody = rows.length ? rows.map((row) => {
+    const tds = columns.map((c) => `<td>${fmt(row[c])}</td>`).join('');
+    let rowActionsHtml = '';
+    if (mod.rowActions && mod.rowActions.includes('pdf')) {
+      rowActionsHtml += `<button class="btn btn-sm btn-outline-secondary" title="PDF" onclick="exportRecordPdf('${mod.key}', ${row.id})"><i class="bi bi-file-earmark-pdf"></i></button> `;
+    }
+    if (mod.showActionValue) {
+      const av = row[mod.showActionValue];
+      rowActionsHtml = `<span class="badge text-bg-secondary me-2" title="Acciones">${av === undefined || av === null || av === '' ? '—' : esc(av)}</span>` + rowActionsHtml;
+    }
+    return `<tr class="${row.id === lastSavedId ? 'row-saved' : ''}">${tds}<td class="text-nowrap">${rowActionsHtml}
+      <button class="btn btn-sm btn-outline-primary" onclick="openEditModal('${mod.key}', ${row.id})"><i class="bi bi-pencil"></i></button>
+      <button class="btn btn-sm btn-outline-danger" onclick="deleteRecord('${mod.key}', ${row.id})"><i class="bi bi-trash"></i></button>
+    </td></tr>`;
+  }).join('') : `<tr><td colspan="${columns.length + 1}" class="text-center text-muted py-4">Sin registros aún</td></tr>`;
+
+  root.innerHTML = `
+    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+      <div class="d-flex gap-2">${exportButtons}</div>
+      <button class="btn btn-primary btn-sm" onclick="openCreateModal('${mod.key}')"><i class="bi bi-plus-lg"></i> Nuevo registro</button>
+    </div>
+    ${mod.chart === 'gastos' ? gastoChartPanel() : ''}
+    <div class="card kpi-card">
+      <div class="table-responsive">
+        <table class="table module-table mb-0">
+          <thead><tr>${theadCols}<th>Acciones</th></tr></thead>
+          <tbody>${tbody}</tbody>
+        </table>
+      </div>
+    </div>`;
+  if (mod.chart === 'gastos') drawGastoChart();
+}
+
+// ---------------------------------------------------------------------
+// Gráfica de líneas de gastos por equipo
+// ---------------------------------------------------------------------
+let gastoChart = null;
+let gastoEquipoSel = '';
+let gastoModo = 'fecha';
+
+function gastoChartPanel() {
+  if (gastoEquipoSel && !equiposCache.find((e) => String(e.id) === String(gastoEquipoSel))) gastoEquipoSel = '';
+  const opts = equiposCache.map((e) => `<option value="${e.id}" ${String(e.id) === String(gastoEquipoSel) ? 'selected' : ''}>${esc(equipoLabel(e))}</option>`).join('');
+  const btn = (m, t) => `<button type="button" class="btn ${gastoModo === m ? 'btn-primary' : 'btn-outline-primary'}" onclick="onGastoModo('${m}')">${t}</button>`;
+  return `
+    <div class="card kpi-card mb-3"><div class="card-body">
+      <div class="d-flex flex-wrap align-items-center gap-2">
+        <i class="bi bi-graph-up text-primary fs-5"></i>
+        <strong class="me-2">Gráfica de gastos por equipo</strong>
+        <select class="form-select form-select-sm w-auto" onchange="onGastoEquipo(this.value)">
+          <option value="">Selecciona un equipo…</option>${opts}
+        </select>
+        <div class="btn-group btn-group-sm ms-md-auto" role="group">${btn('fecha', 'Por fecha')}${btn('lectura', 'Por horómetro/km')}</div>
+      </div>
+      <div id="gastoChartWrap" class="mt-3 d-none">
+        <div id="gastoCanvasBox" style="position:relative;height:300px"><canvas id="gastoChartCanvas"></canvas></div>
+        <div id="gastoChartInfo" class="small text-muted mt-2"></div>
+      </div>
+    </div></div>`;
+}
+
+function onGastoEquipo(v) { gastoEquipoSel = v; renderModule(MODULES.find((m) => m.key === 'gastos')); }
+function onGastoModo(m) { gastoModo = m; renderModule(MODULES.find((m2) => m2.key === 'gastos')); }
+
+function drawGastoChart() {
+  const wrap = document.getElementById('gastoChartWrap');
+  if (!wrap || !gastoEquipoSel) return;
+  wrap.classList.remove('d-none');
+  const box = document.getElementById('gastoCanvasBox');
+  const info = document.getElementById('gastoChartInfo');
+  if (typeof Chart === 'undefined') {
+    box.classList.add('d-none');
+    info.innerHTML = '<div class="alert alert-warning mb-0">No se pudo cargar la librería de gráficas (se necesita conexión a internet).</div>';
+    return;
+  }
+  const rows = DB.getAll('gastos').filter((g) => String(g.equipo_id) === String(gastoEquipoSel));
+  if (!rows.length) {
+    box.classList.add('d-none');
+    info.textContent = 'Este equipo aún no tiene gastos registrados.';
+    return;
+  }
+  box.classList.remove('d-none');
+  const total = rows.reduce((a, g) => a + (parseFloat(g.monto) || 0), 0);
+  let note = '';
+  let data, labels, xScale;
+
+  if (gastoModo === 'fecha') {
+    const sorted = rows.filter((g) => g.fecha).sort((a, b) => a.fecha.localeCompare(b.fecha));
+    labels = sorted.map((g) => g.fecha);
+    data = sorted.map((g) => parseFloat(g.monto) || 0);
+    xScale = { title: { display: true, text: 'Fecha' } };
+  } else {
+    const withL = rows.filter((g) => g.horometro_km !== undefined && g.horometro_km !== '' && !isNaN(parseFloat(g.horometro_km)))
+      .sort((a, b) => parseFloat(a.horometro_km) - parseFloat(b.horometro_km));
+    data = withL.map((g) => ({ x: parseFloat(g.horometro_km), y: parseFloat(g.monto) || 0 }));
+    xScale = { type: 'linear', title: { display: true, text: 'Horómetro / Kilometraje' } };
+    const faltan = rows.length - withL.length;
+    if (faltan) note = ` · ${faltan} registro(s) sin horómetro/km no se muestran en esta vista`;
+  }
+
+  gastoChart = new Chart(document.getElementById('gastoChartCanvas'), {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Gasto (S/)', data, borderColor: '#1f4e79', backgroundColor: 'rgba(31,78,121,.12)',
+        fill: true, tension: 0.3, pointRadius: 5, pointHoverRadius: 7, pointBackgroundColor: '#1f4e79',
+      }],
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false }, tooltip: { callbacks: { label: (c) => 'S/ ' + c.parsed.y.toFixed(2) } } },
+      scales: { y: { beginAtZero: true, title: { display: true, text: 'Gasto (S/)' } }, x: xScale },
+    },
+  });
+  info.textContent = `${rows.length} registro(s) · Total S/ ${total.toFixed(2)} · Promedio S/ ${(total / rows.length).toFixed(2)}${note}`;
+}
+
+// ---------------------------------------------------------------------
+// Formulario genérico (crear/editar)
+// ---------------------------------------------------------------------
+function fieldToHtml(field, value) {
+  const val = value === undefined || value === null ? '' : value;
+  const req = field.required ? 'required' : '';
+
+  if (field.type === 'select') {
+    const opts = field.options.map((o) => `<option value="${esc(o)}" ${val === o ? 'selected' : ''}>${esc(o)}</option>`).join('');
+    return `<select class="form-select" name="${field.key}" ${req}><option value="">-- Seleccionar --</option>${opts}</select>`;
+  }
+  if (field.type === 'equipo') {
+    const opts = equiposCache.map((e) => `<option value="${e.id}" ${String(val) === String(e.id) ? 'selected' : ''}>${esc(equipoLabel(e))}</option>`).join('');
+    return `<select class="form-select" name="${field.key}" ${req}><option value="">-- Seleccionar --</option>${opts}</select>`;
+  }
+  if (field.type === 'textarea') {
+    return `<textarea class="form-control" name="${field.key}" rows="3" ${req}>${esc(val)}</textarea>`;
+  }
+  return `<input type="${field.type}" class="form-control" name="${field.key}" value="${esc(val)}" ${field.type === 'number' ? 'step="any"' : ''} ${field.min !== undefined ? `min="${field.min}"` : ''} placeholder="${esc(field.placeholder || '')}" ${req}>`;
+}
+
+function openCreateModal(modKey) {
+  const mod = MODULES.find((m) => m.key === modKey);
+  editingId = null;
+  refreshEquipos();
+  buildForm(mod, {});
+  document.getElementById('formModalTitle').textContent = `Nuevo: ${mod.label}`;
+  formModal.show();
+}
+
+function openEditModal(modKey, id) {
+  const mod = MODULES.find((m) => m.key === modKey);
+  editingId = id;
+  refreshEquipos();
+  const record = DB.get(mod.table, id);
+  buildForm(mod, record || {});
+  document.getElementById('formModalTitle').textContent = `Editar: ${mod.label}`;
+  formModal.show();
+}
+
+function buildForm(mod, record) {
+  const body = document.getElementById('formModalBody');
+  const isNew = !record || record.id === undefined;
+  document.getElementById('genericForm').classList.remove('was-validated');
+  body.innerHTML = '<div id="formAlert"></div><div class="row g-3">' + mod.fields.map((f) => {
+    let v = record[f.key];
+    if ((v === undefined || v === null) && isNew && f.default !== undefined) v = f.default;
+    const wide = f.type === 'textarea' || f.help;
+    return `
+    <div class="${wide ? 'col-12' : 'col-12 col-md-6'}">
+      <label class="form-label">${f.label}${f.required ? ' <span class="text-danger">*</span>' : ''}</label>
+      ${fieldToHtml(f, v)}
+      ${f.help ? `<div class="form-text">${f.help}</div>` : ''}
+    </div>`;
+  }).join('') + '</div>';
+  body.dataset.modKey = mod.key;
+  if (mod.inverseLink) setupInverseLink(record, isNew);
+}
+
+// Stock y Acciones son inversamente proporcionales: Stock × Acciones = k
+function setupInverseLink(record, isNew) {
+  const f = document.getElementById('genericForm');
+  const stock = f.querySelector('[name="stock"]');
+  const acc = f.querySelector('[name="acciones"]');
+  const k = f.querySelector('[name="k"]');
+  const r2 = (n) => Math.round(n * 100) / 100;
+  const num = (el) => parseFloat(el.value);
+
+  // Registros antiguos sin k: deducir k o usar 100
+  if (!isNew && (record.k === undefined || record.k === '')) {
+    const sv = parseFloat(record.stock), av = parseFloat(record.acciones);
+    k.value = sv > 0 && av > 0 ? r2(sv * av) : 100;
+    if ((acc.value === '') && sv > 0) acc.value = r2(num(k) / sv);
+  }
+
+  stock.addEventListener('input', () => {
+    const s = num(stock), kv = num(k);
+    acc.value = s > 0 && kv > 0 ? r2(kv / s) : '';
+  });
+  acc.addEventListener('input', () => {
+    const a = num(acc), kv = num(k);
+    stock.value = a > 0 && kv > 0 ? r2(kv / a) : '';
+  });
+  k.addEventListener('input', () => {
+    const s = num(stock), kv = num(k);
+    if (s > 0 && kv > 0) acc.value = r2(kv / s);
+  });
+}
+
+let lastSavedId = null;
+
+document.getElementById('genericForm').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const form = e.target;
+  if (!form.checkValidity()) {
+    form.classList.add('was-validated');
+    const first = form.querySelector(':invalid');
+    document.getElementById('formAlert').innerHTML =
+      '<div class="alert alert-danger py-2"><i class="bi bi-exclamation-circle"></i> Completa los campos obligatorios (*) o corrige los datos marcados en rojo.</div>';
+    if (first) { first.scrollIntoView({ block: 'center' }); first.focus(); }
+    return;
+  }
+  const modKey = document.getElementById('formModalBody').dataset.modKey;
+  const mod = MODULES.find((m) => m.key === modKey);
+  const data = {};
+  new FormData(form).forEach((v, k) => { data[k] = v; });
+
+  try {
+    const saved = editingId ? DB.update(mod.table, editingId, data) : DB.insert(mod.table, data);
+    lastSavedId = saved ? saved.id : null;
+    formModal.hide();
+    toast('✔ Registro guardado correctamente');
+  } catch (err) {
+    toast('No se pudo guardar: ' + err.message, 'danger');
+    return;
+  }
+  try { renderModule(mod); }
+  catch (err) { toast('Se guardó, pero hubo un error al mostrar la tabla: ' + err.message, 'danger'); }
+});
+
+function fileToDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+function deleteRecord(modKey, id) {
+  if (!confirm('¿Seguro que deseas eliminar este registro?')) return;
+  const mod = MODULES.find((m) => m.key === modKey);
+  DB.remove(mod.table, id);
+  toast('Registro eliminado');
+  renderModule(mod);
+}
+
+// ---------------------------------------------------------------------
+// Exportación a PDF (jsPDF + autotable) y Excel (SheetJS)
+// ---------------------------------------------------------------------
+function exportModule(modKey, type) {
+  const mod = MODULES.find((m) => m.key === modKey);
+  refreshEquipos();
+  let rows = DB.getAll(mod.table);
+  if (mod.needsEquipo) rows = rows.map(joinEquipo);
+
+  const columns = (mod.exportColumns || mod.columns).map((c) => ({ key: c, label: COLUMN_LABELS[c] || c }));
+
+  if (type === 'pdf') {
+    exportPdf(mod.label, columns, rows);
+  } else {
+    exportExcel(mod.label, columns, rows);
+  }
+}
+
+function exportRecordPdf(modKey, id) {
+  const mod = MODULES.find((m) => m.key === modKey);
+  refreshEquipos();
+  let row = DB.get(mod.table, id);
+  if (mod.needsEquipo) row = joinEquipo(row);
+  const columns = (mod.exportColumns || mod.columns).map((c) => ({ key: c, label: COLUMN_LABELS[c] || c }));
+  exportPdf(`${mod.label} #${id}`, columns, [row]);
+}
+
+function exportPdf(title, columns, rows) {
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation: 'landscape', unit: 'pt' });
+  doc.setFontSize(14);
+  doc.text(title, 40, 30);
+  doc.setFontSize(9);
+  doc.setTextColor(120);
+  doc.text(`Generado: ${new Date().toLocaleString('es-PE')}`, 40, 46);
+  doc.autoTable({
+    startY: 60,
+    head: [columns.map((c) => c.label)],
+    body: rows.map((r) => columns.map((c) => (r[c.key] === undefined || r[c.key] === null ? '' : String(r[c.key])))),
+    styles: { fontSize: 8, cellPadding: 4 },
+    headStyles: { fillColor: [31, 78, 121] },
+  });
+  doc.save(`${slug(title)}.pdf`);
+}
+
+function exportExcel(title, columns, rows) {
+  const data = rows.map((r) => {
+    const obj = {};
+    columns.forEach((c) => { obj[c.label] = r[c.key]; });
+    return obj;
+  });
+  const ws = XLSX.utils.json_to_sheet(data);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, title.substring(0, 30));
+  XLSX.writeFile(wb, `${slug(title)}.xlsx`);
+}
+
+function slug(str) {
+  return String(str).normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9]+/g, '_').toLowerCase();
+}
+
+// ---------------------------------------------------------------------
+// Información técnica: por flota → manuales y ficha técnica
+// ---------------------------------------------------------------------
+const INFO_SECCIONES = [
+  { key: 'mantenimiento', label: 'Manual de mantenimiento', icon: 'bi-wrench-adjustable' },
+  { key: 'partes', label: 'Manual de partes', icon: 'bi-gear-wide-connected' },
+  { key: 'reparacion', label: 'Manual de reparación', icon: 'bi-tools' },
+  { key: 'ficha', label: 'Ficha técnica', icon: 'bi-clipboard-data' },
+];
+let infoEquipoId = null;
+let infoOpenKey = null;
+
+function infoDoc(equipoId, seccion) {
+  return DB.getAll('infotecnica_docs').find((d) => String(d.equipo_id) === String(equipoId) && d.seccion === seccion);
+}
+
+function fichaRows(eq) {
+  return [
+    ['Código', eq.codigo], ['Máquina', eq.maquina], ['Serie', eq.serie], ['Marca', eq.marca],
+    ['Modelo', eq.modelo], ['Año', eq.anio], ['Horómetro (h)', eq.horometro],
+    ['Kilometraje (km)', eq.kilometraje], ['Ubicación', eq.ubicacion], ['Estado', eq.estado],
+  ];
+}
+
+function openInfoEquipo(id) { infoEquipoId = id; infoOpenKey = null; renderInfoTecnica(); }
+function closeInfoEquipo() { infoEquipoId = null; infoOpenKey = null; renderInfoTecnica(); }
+
+function renderInfoTecnica() {
+  const root = document.getElementById('appRoot');
+  refreshEquipos();
+  if (infoEquipoId && !equiposCache.find((e) => String(e.id) === String(infoEquipoId))) infoEquipoId = null;
+
+  if (!infoEquipoId) {
+    const rows = equiposCache.length
+      ? equiposCache.map((e) => `<tr>
+          <td>${fmt(e.codigo)}</td><td>${fmt(e.maquina)}</td><td>${fmt(e.serie)}</td><td>${fmt(e.marca)}</td><td>${fmt(e.modelo)}</td>
+          <td class="text-nowrap"><button class="btn btn-sm btn-primary" onclick="openInfoEquipo(${e.id})"><i class="bi bi-folder2-open"></i> Abrir</button></td>
+        </tr>`).join('')
+      : `<tr><td colspan="6" class="text-center text-muted py-4">Aún no hay flotas. Regístralas primero en Gestión de Flotas.</td></tr>`;
+    root.innerHTML = `
+      <p class="text-muted">Selecciona una flota para ver sus manuales y su ficha técnica.</p>
+      <div class="card kpi-card"><div class="table-responsive">
+        <table class="table module-table table-hover mb-0">
+          <thead><tr><th>Código</th><th>Máquina</th><th>Serie</th><th>Marca</th><th>Modelo</th><th>Acciones</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div></div>`;
+    return;
+  }
+
+  const eq = equiposCache.find((e) => String(e.id) === String(infoEquipoId));
+  const items = INFO_SECCIONES.map((s) => {
+    const doc = infoDoc(eq.id, s.key) || {};
+    const open = infoOpenKey === s.key;
+    const hasInfo = !!(doc.contenido || doc.archivo_nombre);
+    const ficha = s.key === 'ficha'
+      ? `<table class="table table-sm mb-3"><tbody>${fichaRows(eq).map((r) => `<tr><th class="w-25 bg-light">${r[0]}</th><td>${fmt(r[1])}</td></tr>`).join('')}</tbody></table>
+         <label class="form-label">Información adicional</label>`
+      : '';
+    const fileBlock = doc.archivo_nombre
+      ? `<div class="mb-2"><i class="bi bi-paperclip"></i> ${esc(doc.archivo_nombre)}
+           <button class="btn btn-sm btn-outline-secondary ms-2" onclick="downloadInfoFile(${doc.id})"><i class="bi bi-download"></i> Descargar</button>
+           <button class="btn btn-sm btn-outline-danger" title="Quitar archivo" onclick="removeInfoFile(${doc.id})"><i class="bi bi-x-lg"></i></button></div>`
+      : '';
+    return `
+      <div class="accordion-item">
+        <h2 class="accordion-header">
+          <button class="accordion-button ${open ? '' : 'collapsed'}" type="button" data-bs-toggle="collapse" data-bs-target="#info-${s.key}">
+            <i class="bi ${s.icon} me-2"></i>${s.label}
+            ${hasInfo ? '<span class="badge text-bg-success ms-2">con información</span>' : ''}
+          </button>
+        </h2>
+        <div id="info-${s.key}" class="accordion-collapse collapse ${open ? 'show' : ''}" data-bs-parent="#infoAccordion">
+          <div class="accordion-body">
+            ${ficha}
+            <textarea class="form-control mb-3" id="info-text-${s.key}" rows="6" placeholder="Escribe aquí la información de ${s.label.toLowerCase()} de esta flota...">${esc(doc.contenido || '')}</textarea>
+            ${fileBlock}
+            <label class="form-label small text-muted mb-1">Adjuntar archivo (PDF, Word, Excel, imagen — máx. 2 MB)</label>
+            <input type="file" class="form-control form-control-sm mb-3" id="info-file-${s.key}">
+            <button class="btn btn-primary btn-sm" onclick="saveInfoSection(${eq.id}, '${s.key}')"><i class="bi bi-save"></i> Guardar</button>
+          </div>
+        </div>
+      </div>`;
+  }).join('');
+
+  root.innerHTML = `
+    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+      <div>
+        <button class="btn btn-outline-secondary btn-sm me-2" onclick="closeInfoEquipo()"><i class="bi bi-arrow-left"></i> Flotas</button>
+        <strong>${esc(eq.codigo)} - ${esc(eq.maquina || '')}</strong>
+        <span class="text-muted">${eq.serie ? '· Serie ' + esc(eq.serie) : ''}</span>
+      </div>
+      <button class="btn btn-outline-secondary btn-sm" onclick="exportInfoPdf(${eq.id})"><i class="bi bi-file-earmark-pdf"></i> PDF</button>
+    </div>
+    <div class="accordion" id="infoAccordion">${items}</div>`;
+}
+
+async function saveInfoSection(equipoId, seccion) {
+  const ta = document.getElementById('info-text-' + seccion);
+  const fi = document.getElementById('info-file-' + seccion);
+  const file = fi && fi.files[0];
+  const patch = { contenido: ta.value };
+  try {
+    if (file) {
+      if (file.size > 2 * 1024 * 1024) { toast('El archivo supera 2 MB', 'danger'); return; }
+      patch.archivo_nombre = file.name;
+      patch.archivo_data = await fileToDataUrl(file);
+    }
+    const existing = infoDoc(equipoId, seccion);
+    if (existing) DB.update('infotecnica_docs', existing.id, patch);
+    else DB.insert('infotecnica_docs', { equipo_id: equipoId, seccion, ...patch });
+    infoOpenKey = seccion;
+    renderInfoTecnica();
+    toast('Información guardada');
+  } catch (err) {
+    toast('No se pudo guardar (¿almacenamiento lleno?): ' + err.message, 'danger');
+  }
+}
+
+function downloadInfoFile(docId) {
+  const d = DB.get('infotecnica_docs', docId);
+  if (!d || !d.archivo_data) return;
+  const a = document.createElement('a');
+  a.href = d.archivo_data;
+  a.download = d.archivo_nombre || 'archivo';
+  a.click();
+}
+
+function removeInfoFile(docId) {
+  const d = DB.get('infotecnica_docs', docId);
+  if (!d) return;
+  DB.update('infotecnica_docs', docId, { archivo_nombre: '', archivo_data: '' });
+  infoOpenKey = d.seccion;
+  renderInfoTecnica();
+}
+
+function exportInfoPdf(equipoId) {
+  refreshEquipos();
+  const eq = equiposCache.find((e) => String(e.id) === String(equipoId));
+  if (!eq) return;
+  const body = fichaRows(eq).map((r) => ['Ficha técnica: ' + r[0], r[1] === undefined || r[1] === null ? '' : String(r[1])]);
+  INFO_SECCIONES.forEach((s) => {
+    const d = infoDoc(eq.id, s.key) || {};
+    const txt = (d.contenido || '(sin información)') + (d.archivo_nombre ? `\n[Archivo adjunto: ${d.archivo_nombre}]` : '');
+    body.push([s.key === 'ficha' ? 'Ficha técnica: información adicional' : s.label, txt]);
+  });
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'pt' });
+  doc.setFontSize(14);
+  doc.text(`Información técnica - ${eq.maquina || ''} (Serie ${eq.serie || '-'})`, 40, 30);
+  doc.setFontSize(9);
+  doc.setTextColor(120);
+  doc.text(`Generado: ${new Date().toLocaleString('es-PE')}`, 40, 46);
+  doc.autoTable({
+    startY: 60,
+    head: [['Sección', 'Información']],
+    body,
+    styles: { fontSize: 9, cellPadding: 5 },
+    headStyles: { fillColor: [31, 78, 121] },
+    columnStyles: { 0: { cellWidth: 150, fontStyle: 'bold' } },
+  });
+  doc.save(`informacion_tecnica_${slug(eq.codigo || eq.id)}.pdf`);
+}
+
+// ---------------------------------------------------------------------
+// Respaldo / restauración completa de datos (JSON)
+// ---------------------------------------------------------------------
+document.getElementById('btnExportBackup').addEventListener('click', () => {
+  const backup = {};
+  MODULES.forEach((m) => { backup[m.table] = DB.getAll(m.table); });
+  const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `respaldo_gestion_activos_${new Date().toISOString().slice(0, 10)}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+});
+
+document.getElementById('inputRestore').addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const backup = JSON.parse(reader.result);
+      if (!confirm('Esto reemplazará los datos actuales de este navegador con los del respaldo. ¿Continuar?')) return;
+      MODULES.forEach((m) => {
+        if (backup[m.table]) DB.saveAll(m.table, backup[m.table]);
+      });
+      toast('Respaldo restaurado correctamente');
+      route();
+    } catch (err) {
+      toast('El archivo de respaldo no es válido', 'danger');
+    }
+  };
+  reader.readAsText(file);
+  e.target.value = '';
+});
+
+// ---------------------------------------------------------------------
+// Arranque
+// ---------------------------------------------------------------------
+window.addEventListener('error', (e) => toast('Error: ' + e.message, 'danger'));
+window.addEventListener('unhandledrejection', (e) => toast('Error: ' + (e.reason && e.reason.message ? e.reason.message : e.reason), 'danger'));
+
+renderSidebar();
+route();
+</script>
+</body>
+</html>
